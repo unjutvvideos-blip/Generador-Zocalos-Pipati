@@ -29,9 +29,10 @@ BOTTOM_FILL = (255, 255, 255, 255)
 
 
 def app_base():
-    # Compatible con ejecución normal y con PyInstaller --onefile.
+    # En PyInstaller --onefile, los archivos incluidos se extraen
+    # temporalmente en sys._MEIPASS. No están junto al .exe.
     if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
+        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
     return Path(__file__).resolve().parent
 
 
