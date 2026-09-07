@@ -7,7 +7,7 @@ import os
 import sys
 
 APP_TITLE = "Generador de Zócalos Pipatí"
-APP_VERSION = "0.6"
+APP_VERSION = "0.7"
 W, H = 1920, 1080
 
 DEFAULTS = {
@@ -149,13 +149,20 @@ class GeneratorApp:
 
     @staticmethod
     def draw_centered(draw, text, center_x, center_y, font, fill, stable_vertical=False):
-        # Centrado geométrico REAL del texto según su bounding box.
-        # Esto hace que el centro visible de cada texto quede exactamente
-        # en el centro del marco, independientemente de las letras que tenga.
+        # Centrado horizontal + posición vertical estable.
+        # Para la Línea 01 no usamos el centro del bounding box del glifo,
+        # porque Fira Sans modifica su bbox cuando aparecen tildes/acentos
+        # y eso provoca que unas palabras suban respecto de otras.
         box = draw.textbbox((0, 0), text, font=font)
         cx = (box[0] + box[2]) / 2
-        cy = (box[1] + box[3]) / 2
-        draw.text((center_x - cx, center_y - cy), text, font=font, fill=fill)
+        if stable_vertical:
+            # El valor center_y representa aquí la posición del BORDE INFERIOR
+            # visible del texto. Se mantiene constante aunque cambie el texto.
+            y = center_y - box[3]
+        else:
+            cy = (box[1] + box[3]) / 2
+            y = center_y - cy
+        draw.text((center_x - cx, y), text, font=font, fill=fill)
 
     def render(self, top, bottom):
         template = self.template_path
@@ -170,9 +177,11 @@ class GeneratorApp:
         p = self.params
         f1 = self.fit_font(draw, top, p["top_max_width"], p["top_size"], p["top_min_size"], top_font_path)
         f2 = self.fit_font(draw, bottom, p["bottom_max_width"], p["bottom_size"], p["bottom_min_size"], bottom_font_path)
-        # El marco rosa de la plantilla ocupa Y=885..933; su centro geométrico
-        # es Y=909. Se centra el bounding box visible del texto en ese punto.
-        self.draw_centered(draw, top, p["top_x"], p["top_y"], f1, TOP_FILL)
+        # Línea 01: el marco rosa tiene su centro visual en torno a Y=909.
+        # La referencia vertical estable se calibra por el borde inferior
+        # visible del texto: Y=928.5. Esto evita que las tildes/acentos
+        # cambien la posición vertical percibida entre zócalos.
+        self.draw_centered(draw, top, p["top_x"], 928.5, f1, TOP_FILL, stable_vertical=True)
         self.draw_centered(draw, bottom, p["bottom_x"], p["bottom_y"], f2, BOTTOM_FILL)
         return im
 
