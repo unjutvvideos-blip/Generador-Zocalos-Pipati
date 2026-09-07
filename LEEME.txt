@@ -1,0 +1,36 @@
+GENERADOR DE ZÓCALOS PIPATÍ — versión 0.2
+
+OBJETIVO
+Convertir automáticamente un TXT con pares de líneas en PNG independientes de 1920×1080 con fondo transparente, sin abrir Photoshop.
+
+FORMATO DEL TXT
+Cada zócalo ocupa exactamente dos líneas no vacías:
+Línea 01
+Línea 02
+
+Luego otro par, y así sucesivamente.
+
+INCLUYE
+- Plantilla PNG 1920×1080.
+- Fuentes incluidas en assets.
+- Ajuste automático de tamaño si un texto es demasiado largo.
+- Vista previa.
+- Generación numerada de todos los PNG.
+- Selección de TXT y carpeta de salida.
+
+IMPORTANTE
+La plantilla gráfica usada por esta aplicación es la versión PNG de trabajo. La posición y el aspecto fueron calibrados tomando como referencia el PSD maestro aprobado.
+
+CREAR EL EXE DE WINDOWS
+Este proyecto incluye .github/workflows/build-windows.yml.
+La forma recomendada, sin instalar Python en tu PC, es subir esta carpeta a un repositorio de GitHub y ejecutar el workflow “Crear EXE de Windows”. GitHub compila el programa en una máquina Windows y entrega el EXE como artefacto.
+
+USO DEL EXE
+Una vez descargado el EXE:
+1. Abrir Generador_Zocalos_Pipati.exe.
+2. Seleccionar el TXT.
+3. Seleccionar la carpeta de salida.
+4. Pulsar Vista previa si se desea comprobar el primer zócalo.
+5. Pulsar GENERAR ZÓCALOS.
+
+NO ES NECESARIO TENER PHOTOSHOP NI PYTHON INSTALADOS PARA USAR EL EXE FINAL.
