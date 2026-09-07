@@ -30,4 +30,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Generador-Zocalos-Pipati-Windows
-          path: dist/Generador_Zocalos.exe
+          path: dist/Generador_Zocalos_Pipati.exe
