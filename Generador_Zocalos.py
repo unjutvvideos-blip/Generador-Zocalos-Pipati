@@ -7,7 +7,7 @@ import os
 import sys
 
 APP_TITLE = "Generador de Zócalos Pipatí"
-APP_VERSION = "0.4"
+APP_VERSION = "0.5"
 W, H = 1920, 1080
 
 DEFAULTS = {
@@ -44,13 +44,14 @@ class GeneratorApp:
     def __init__(self, root):
         self.root = root
         self.root.title(f"{APP_TITLE} — v{APP_VERSION}")
-        self.root.geometry("760x560")
+        self.root.geometry("760x540")
         self.root.resizable(False, False)
         self.params = DEFAULTS.copy()
 
-        self.template_var = tk.StringVar(value=str(ASSETS / "plantilla_vacia.png"))
+        # La gráfica es fija y está integrada dentro del ejecutable.
+        self.template_path = ASSETS / "plantilla_vacia.png"
         self.txt_var = tk.StringVar(value=str(BASE / "ejemplo_zocalos.txt"))
-        self.output_var = tk.StringVar(value=str(BASE / "salida"))
+        self.output_var = tk.StringVar(value=str(Path.home() / "Desktop" / "Zocalos generados"))
         self.status_var = tk.StringVar(value="Listo para generar.")
         self.count_var = tk.StringVar(value="")
 
@@ -65,7 +66,8 @@ class GeneratorApp:
 
         files = ttk.LabelFrame(outer, text="Archivos", padding=12)
         files.pack(fill="x")
-        self.add_row(files, 0, "Plantilla PNG", self.template_var, self.choose_template)
+        ttk.Label(files, text="Gráfica", width=15).grid(row=0, column=0, sticky="w", pady=7)
+        ttk.Label(files, text="Plantilla Pipatí integrada en la aplicación", foreground="#555555").grid(row=0, column=1, padx=7, sticky="w")
         self.add_row(files, 1, "Archivo TXT", self.txt_var, self.choose_txt)
         self.add_row(files, 2, "Carpeta salida", self.output_var, self.choose_output)
 
@@ -100,11 +102,6 @@ class GeneratorApp:
         ttk.Entry(parent, textvariable=variable, width=72).grid(row=row, column=1, padx=7, sticky="ew")
         ttk.Button(parent, text="Elegir…", command=command).grid(row=row, column=2)
         parent.columnconfigure(1, weight=1)
-
-    def choose_template(self):
-        p = filedialog.askopenfilename(title="Seleccionar plantilla PNG", filetypes=[("PNG", "*.png"), ("Todos los archivos", "*.*")])
-        if p:
-            self.template_var.set(p)
 
     def choose_txt(self):
         p = filedialog.askopenfilename(title="Seleccionar TXT", filetypes=[("Archivos de texto", "*.txt"), ("Todos los archivos", "*.*")])
@@ -151,22 +148,27 @@ class GeneratorApp:
         return ImageFont.truetype(str(font_path), int(min_size))
 
     @staticmethod
-    def draw_centered(draw, text, center_x, center_y, font, fill, fixed_baseline=False):
-        # Línea 01: usar una línea base fija para que los cambios de contenido
-        # (y sus distintos ascendentes/descendentes) no alteren la posición vertical.
-        if fixed_baseline:
-            draw.text((center_x, center_y), text, font=font, fill=fill, anchor="ms")
-            return
-
+    def draw_centered(draw, text, center_x, center_y, font, fill, stable_vertical=False):
         box = draw.textbbox((0, 0), text, font=font)
         cx = (box[0] + box[2]) / 2
+
+        if stable_vertical:
+            # El centro vertical se calcula con una caja de referencia fija,
+            # no con las letras particulares del texto. Así cada contenido
+            # conserva exactamente la misma altura de colocación.
+            ref = draw.textbbox((0, 0), "Ag", font=font)
+            ref_cy = (ref[1] + ref[3]) / 2
+            y = center_y - ref_cy - box[1]
+            draw.text((center_x - cx, y), text, font=font, fill=fill)
+            return
+
         cy = (box[1] + box[3]) / 2
         draw.text((center_x - cx, center_y - cy), text, font=font, fill=fill)
 
     def render(self, top, bottom):
-        template = Path(self.template_var.get())
+        template = self.template_path
         if not template.exists():
-            raise FileNotFoundError(f"No se encontró la plantilla:\n{template}")
+            raise FileNotFoundError("No se encontró la gráfica integrada de Pipatí.")
         im = Image.open(template).convert("RGBA")
         if im.size != (W, H):
             raise ValueError(f"La plantilla debe ser 1920×1080. La seleccionada es {im.width}×{im.height}.")
@@ -176,8 +178,8 @@ class GeneratorApp:
         p = self.params
         f1 = self.fit_font(draw, top, p["top_max_width"], p["top_size"], p["top_min_size"], top_font_path)
         f2 = self.fit_font(draw, bottom, p["bottom_max_width"], p["bottom_size"], p["bottom_min_size"], bottom_font_path)
-        # top_y representa ahora la línea base fija de la Línea 01.
-        self.draw_centered(draw, top, p["top_x"], p["top_y"], f1, TOP_FILL, fixed_baseline=True)
+        # top_y es el centro vertical fijo de referencia del diseño maestro.
+        self.draw_centered(draw, top, p["top_x"], p["top_y"], f1, TOP_FILL, stable_vertical=True)
         self.draw_centered(draw, bottom, p["bottom_x"], p["bottom_y"], f2, BOTTOM_FILL)
         return im
 
