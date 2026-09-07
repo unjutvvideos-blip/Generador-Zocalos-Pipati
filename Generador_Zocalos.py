@@ -7,12 +7,12 @@ import os
 import sys
 
 APP_TITLE = "Generador de Zócalos Pipatí"
-APP_VERSION = "0.5"
+APP_VERSION = "0.6"
 W, H = 1920, 1080
 
 DEFAULTS = {
     "top_x": 960,
-    "top_y": 905,
+    "top_y": 909,
     "bottom_x": 960,
     "bottom_y": 975,
     "top_size": 39,
@@ -149,19 +149,11 @@ class GeneratorApp:
 
     @staticmethod
     def draw_centered(draw, text, center_x, center_y, font, fill, stable_vertical=False):
+        # Centrado geométrico REAL del texto según su bounding box.
+        # Esto hace que el centro visible de cada texto quede exactamente
+        # en el centro del marco, independientemente de las letras que tenga.
         box = draw.textbbox((0, 0), text, font=font)
         cx = (box[0] + box[2]) / 2
-
-        if stable_vertical:
-            # El centro vertical se calcula con una caja de referencia fija,
-            # no con las letras particulares del texto. Así cada contenido
-            # conserva exactamente la misma altura de colocación.
-            ref = draw.textbbox((0, 0), "Ag", font=font)
-            ref_cy = (ref[1] + ref[3]) / 2
-            y = center_y - ref_cy - box[1]
-            draw.text((center_x - cx, y), text, font=font, fill=fill)
-            return
-
         cy = (box[1] + box[3]) / 2
         draw.text((center_x - cx, center_y - cy), text, font=font, fill=fill)
 
@@ -178,8 +170,9 @@ class GeneratorApp:
         p = self.params
         f1 = self.fit_font(draw, top, p["top_max_width"], p["top_size"], p["top_min_size"], top_font_path)
         f2 = self.fit_font(draw, bottom, p["bottom_max_width"], p["bottom_size"], p["bottom_min_size"], bottom_font_path)
-        # top_y es el centro vertical fijo de referencia del diseño maestro.
-        self.draw_centered(draw, top, p["top_x"], p["top_y"], f1, TOP_FILL, stable_vertical=True)
+        # El marco rosa de la plantilla ocupa Y=885..933; su centro geométrico
+        # es Y=909. Se centra el bounding box visible del texto en ese punto.
+        self.draw_centered(draw, top, p["top_x"], p["top_y"], f1, TOP_FILL)
         self.draw_centered(draw, bottom, p["bottom_x"], p["bottom_y"], f2, BOTTOM_FILL)
         return im
 
