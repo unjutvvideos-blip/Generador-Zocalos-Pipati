@@ -7,7 +7,7 @@ import os
 import sys
 
 APP_TITLE = "Generador de Zócalos Pipatí"
-APP_VERSION = "0.7"
+APP_VERSION = "1.0"
 W, H = 1920, 1080
 
 DEFAULTS = {
@@ -44,58 +44,93 @@ class GeneratorApp:
     def __init__(self, root):
         self.root = root
         self.root.title(f"{APP_TITLE} — v{APP_VERSION}")
-        self.root.geometry("760x540")
+        self.root.geometry("760x560")
         self.root.resizable(False, False)
         self.params = DEFAULTS.copy()
-
-        # La gráfica es fija y está integrada dentro del ejecutable.
         self.template_path = ASSETS / "plantilla_vacia.png"
-        self.txt_var = tk.StringVar(value=str(BASE / "ejemplo_zocalos.txt"))
+        self.txt_var = tk.StringVar(value="")
         self.output_var = tk.StringVar(value=str(Path.home() / "Desktop" / "Zocalos generados"))
-        self.status_var = tk.StringVar(value="Listo para generar.")
-        self.count_var = tk.StringVar(value="")
-
+        self.status_var = tk.StringVar(value="Arrastrá un archivo TXT para comenzar.")
+        self.count_var = tk.StringVar(value="Ningún TXT seleccionado")
+        self.dnd_enabled = False
         self.build_ui()
+        self.setup_drag_drop()
+        self.root.after(100, self.handle_command_line_file)
 
     def build_ui(self):
         outer = ttk.Frame(self.root, padding=18)
         outer.pack(fill="both", expand=True)
 
-        ttk.Label(outer, text="GENERADOR DE ZÓCALOS", font=("Segoe UI", 19, "bold")).pack()
-        ttk.Label(outer, text="TXT → PNG  •  1920×1080  •  sin Photoshop", font=("Segoe UI", 10)).pack(pady=(2, 18))
+        ttk.Label(outer, text="GENERADOR DE ZÓCALOS", font=("Segoe UI", 20, "bold")).pack()
+        ttk.Label(outer, text="Pipatí  •  TXT → PNG  •  1920×1080", font=("Segoe UI", 10)).pack(pady=(2, 16))
 
-        files = ttk.LabelFrame(outer, text="Archivos", padding=12)
-        files.pack(fill="x")
-        ttk.Label(files, text="Gráfica", width=15).grid(row=0, column=0, sticky="w", pady=7)
-        ttk.Label(files, text="Plantilla Pipatí integrada en la aplicación", foreground="#555555").grid(row=0, column=1, padx=7, sticky="w")
-        self.add_row(files, 1, "Archivo TXT", self.txt_var, self.choose_txt)
-        self.add_row(files, 2, "Carpeta salida", self.output_var, self.choose_output)
+        drop = tk.Frame(outer, bd=2, relief="groove", height=145)
+        drop.pack(fill="x", pady=(0, 14))
+        drop.pack_propagate(False)
+        self.drop_frame = drop
+        self.drop_title = tk.Label(drop, text="ARRASTRÁ TU ARCHIVO TXT AQUÍ", font=("Segoe UI", 16, "bold"))
+        self.drop_title.pack(pady=(28, 5))
+        self.drop_hint = tk.Label(drop, text="o hacé clic para elegirlo", font=("Segoe UI", 10))
+        self.drop_hint.pack()
+        for w in (drop, self.drop_title, self.drop_hint):
+            w.bind("<Button-1>", lambda e: self.choose_txt())
+
+        info = ttk.LabelFrame(outer, text="Archivo seleccionado", padding=10)
+        info.pack(fill="x", pady=(0, 12))
+        ttk.Label(info, textvariable=self.txt_var, wraplength=690).pack(anchor="w")
+        ttk.Label(info, textvariable=self.count_var, font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(6, 0))
+
+        out = ttk.LabelFrame(outer, text="Carpeta de salida", padding=10)
+        out.pack(fill="x", pady=(0, 12))
+        ttk.Entry(out, textvariable=self.output_var, width=68).pack(side="left", fill="x", expand=True)
+        ttk.Button(out, text="Elegir…", command=self.choose_output).pack(side="left", padx=(8, 0))
 
         actions = ttk.Frame(outer)
-        actions.pack(fill="x", pady=(14, 8))
-        ttk.Button(actions, text="Ajustes", command=self.settings).pack(side="left")
-        ttk.Button(actions, text="Vista previa", command=self.preview).pack(side="left", padx=8)
-        ttk.Button(actions, text="Abrir carpeta de salida", command=self.open_output).pack(side="left")
-
+        actions.pack(fill="x", pady=(2, 8))
+        ttk.Button(actions, text="Vista previa", command=self.preview).pack(side="left")
+        ttk.Button(actions, text="Abrir carpeta", command=self.open_output).pack(side="left", padx=8)
         self.generate_btn = ttk.Button(actions, text="GENERAR ZÓCALOS", command=self.generate)
-        self.generate_btn.pack(side="right", ipadx=18, ipady=5)
-
-        info = ttk.LabelFrame(outer, text="Resumen", padding=12)
-        info.pack(fill="x", pady=(4, 10))
-        ttk.Label(info, textvariable=self.count_var, font=("Segoe UI", 10, "bold")).pack(anchor="w")
-        ttk.Label(info, text="Cada par de líneas del TXT genera un PNG independiente con fondo transparente.", wraplength=690).pack(anchor="w", pady=(5, 0))
+        self.generate_btn.pack(side="right", ipadx=24, ipady=8)
 
         self.progress = ttk.Progressbar(outer, orient="horizontal", length=700, mode="determinate")
         self.progress.pack(fill="x", pady=(5, 4))
         ttk.Label(outer, textvariable=self.status_var).pack(anchor="w")
+        ttk.Label(outer, text="La gráfica Pipatí y la configuración tipográfica están integradas y protegidas.", font=("Segoe UI", 9)).pack(pady=(16, 0))
 
-        ttk.Label(
-            outer,
-            text="La plantilla gráfica queda intacta; la aplicación sólo coloca y ajusta automáticamente los textos.",
-            font=("Segoe UI", 9)
-        ).pack(pady=(18, 0))
+    def setup_drag_drop(self):
+        try:
+            from tkinterdnd2 import DND_FILES, TkinterDnD
+            # La ventana ya fue creada con Tk; TkinterDnD no puede convertirla
+            # de forma segura después de creada. El soporte real se activa en
+            # main() cuando el paquete está disponible.
+        except Exception:
+            self.drop_hint.config(text="o hacé clic para elegirlo")
+            return
+        self.drop_hint.config(text="o hacé clic para elegirlo")
 
+    def handle_drop(self, event):
+        try:
+            from tkinterdnd2 import TkinterDnD
+            paths = self.root.tk.splitlist(event.data)
+            if not paths:
+                return
+            p = Path(paths[0])
+            if p.suffix.lower() != ".txt":
+                raise ValueError("Soltá un archivo .TXT")
+            self.set_txt(p)
+        except Exception as e:
+            messagebox.showerror(APP_TITLE, str(e))
+
+    def handle_command_line_file(self):
+        if len(sys.argv) > 1:
+            p = Path(sys.argv[1].strip('"'))
+            if p.exists() and p.suffix.lower() == ".txt":
+                self.set_txt(p)
+
+    def set_txt(self, path):
+        self.txt_var.set(str(path))
         self.refresh_count()
+        self.status_var.set("TXT listo para generar.")
 
     def add_row(self, parent, row, label, variable, command):
         ttk.Label(parent, text=label, width=15).grid(row=row, column=0, sticky="w", pady=7)
@@ -106,8 +141,7 @@ class GeneratorApp:
     def choose_txt(self):
         p = filedialog.askopenfilename(title="Seleccionar TXT", filetypes=[("Archivos de texto", "*.txt"), ("Todos los archivos", "*.*")])
         if p:
-            self.txt_var.set(p)
-            self.refresh_count()
+            self.set_txt(Path(p))
 
     def choose_output(self):
         p = filedialog.askdirectory(title="Seleccionar carpeta de salida")
@@ -117,7 +151,7 @@ class GeneratorApp:
     def parse_txt(self):
         p = Path(self.txt_var.get())
         if not p.exists():
-            raise FileNotFoundError(f"No se encontró el TXT:\n{p}")
+            raise FileNotFoundError("Primero seleccioná o arrastrá un archivo TXT.")
         raw = p.read_text(encoding="utf-8-sig")
         lines = [x.strip() for x in raw.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
         lines = [x for x in lines if x]
@@ -128,9 +162,9 @@ class GeneratorApp:
     def refresh_count(self):
         try:
             pairs = self.parse_txt()
-            self.count_var.set(f"{len(pairs)} zócalos detectados en el TXT")
-        except Exception as e:
-            self.count_var.set("No se pudo leer el TXT todavía.")
+            self.count_var.set(f"✓ {len(pairs)} zócalos detectados")
+        except Exception:
+            self.count_var.set("No se pudo leer el TXT todavía")
 
     def font_paths(self):
         top = ASSETS / "FiraSansExtraCondensed-ExtraBold.ttf"
@@ -149,15 +183,9 @@ class GeneratorApp:
 
     @staticmethod
     def draw_centered(draw, text, center_x, center_y, font, fill, stable_vertical=False):
-        # Centrado horizontal + posición vertical estable.
-        # Para la Línea 01 no usamos el centro del bounding box del glifo,
-        # porque Fira Sans modifica su bbox cuando aparecen tildes/acentos
-        # y eso provoca que unas palabras suban respecto de otras.
         box = draw.textbbox((0, 0), text, font=font)
         cx = (box[0] + box[2]) / 2
         if stable_vertical:
-            # El valor center_y representa aquí la posición del BORDE INFERIOR
-            # visible del texto. Se mantiene constante aunque cambie el texto.
             y = center_y - box[3]
         else:
             cy = (box[1] + box[3]) / 2
@@ -165,22 +193,16 @@ class GeneratorApp:
         draw.text((center_x - cx, y), text, font=font, fill=fill)
 
     def render(self, top, bottom):
-        template = self.template_path
-        if not template.exists():
+        if not self.template_path.exists():
             raise FileNotFoundError("No se encontró la gráfica integrada de Pipatí.")
-        im = Image.open(template).convert("RGBA")
+        im = Image.open(self.template_path).convert("RGBA")
         if im.size != (W, H):
             raise ValueError(f"La plantilla debe ser 1920×1080. La seleccionada es {im.width}×{im.height}.")
-
         top_font_path, bottom_font_path = self.font_paths()
         draw = ImageDraw.Draw(im)
         p = self.params
         f1 = self.fit_font(draw, top, p["top_max_width"], p["top_size"], p["top_min_size"], top_font_path)
         f2 = self.fit_font(draw, bottom, p["bottom_max_width"], p["bottom_size"], p["bottom_min_size"], bottom_font_path)
-        # Línea 01: el marco rosa tiene su centro visual en torno a Y=909.
-        # La referencia vertical estable se calibra por el borde inferior
-        # visible del texto: Y=928.5. Esto evita que las tildes/acentos
-        # cambien la posición vertical percibida entre zócalos.
         self.draw_centered(draw, top, p["top_x"], 928.5, f1, TOP_FILL, stable_vertical=True)
         self.draw_centered(draw, bottom, p["bottom_x"], p["bottom_y"], f2, BOTTOM_FILL)
         return im
@@ -200,16 +222,12 @@ class GeneratorApp:
             self.progress["maximum"] = len(pairs)
             self.progress["value"] = 0
             self.generate_btn.config(state="disabled")
-
             for idx, (top, bottom) in enumerate(pairs, 1):
-                self.status_var.set(f"Generando {idx}/{len(pairs)}…")
+                self.status_var.set(f"Generando zócalo {idx}/{len(pairs)}…")
                 self.root.update_idletasks()
-                im = self.render(top, bottom)
-                name = f"{idx:02d} - {self.safe_name(top)}.png"
-                im.save(out / name, "PNG")
+                self.render(top, bottom).save(out / f"{idx:02d} - {self.safe_name(top)}.png", "PNG")
                 self.progress["value"] = idx
-
-            self.status_var.set(f"Proceso terminado: {len(pairs)} PNG generados.")
+            self.status_var.set(f"✓ Proceso terminado: {len(pairs)} PNG generados.")
             messagebox.showinfo(APP_TITLE, f"Proceso terminado.\n\nGenerados: {len(pairs)} PNG\n\nCarpeta:\n{out}")
             self.open_output()
         except Exception as e:
@@ -242,42 +260,25 @@ class GeneratorApp:
         except Exception:
             pass
 
-    def settings(self):
-        win = tk.Toplevel(self.root)
-        win.title("Ajustes del diseño")
-        win.geometry("410x455")
-        win.resizable(False, False)
-        fields = [
-            ("X línea 01", "top_x"), ("Y línea 01", "top_y"),
-            ("X línea 02", "bottom_x"), ("Y línea 02", "bottom_y"),
-            ("Tamaño línea 01", "top_size"), ("Tamaño línea 02", "bottom_size"),
-            ("Ancho máximo línea 01", "top_max_width"), ("Ancho máximo línea 02", "bottom_max_width"),
-        ]
-        vars_ = {}
-        for r, (label, key) in enumerate(fields):
-            ttk.Label(win, text=label, width=24).grid(row=r, column=0, padx=12, pady=7, sticky="w")
-            v = tk.StringVar(value=str(self.params[key]))
-            vars_[key] = v
-            ttk.Entry(win, textvariable=v, width=15).grid(row=r, column=1, padx=8, pady=7)
-
-        ttk.Label(win, text="Estos parámetros quedan guardados sólo durante esta ejecución.", wraplength=360).grid(row=8, column=0, columnspan=2, padx=15, pady=(8, 4))
-
-        def save():
-            try:
-                for key, v in vars_.items():
-                    self.params[key] = int(float(v.get()))
-                win.destroy()
-            except ValueError:
-                messagebox.showerror("Ajustes", "Todos los valores deben ser numéricos.")
-
-        ttk.Button(win, text="Guardar", command=save).grid(row=9, column=0, columnspan=2, pady=20)
-
 
 if __name__ == "__main__":
-    root = tk.Tk()
+    try:
+        from tkinterdnd2 import TkinterDnD, DND_FILES
+        root = TkinterDnD.Tk()
+        dnd_ok = True
+    except Exception:
+        root = tk.Tk()
+        dnd_ok = False
     try:
         ttk.Style().theme_use("vista")
     except Exception:
         pass
-    GeneratorApp(root)
+    app = GeneratorApp(root)
+    if dnd_ok:
+        app.drop_frame.drop_target_register(DND_FILES)
+        app.drop_frame.dnd_bind("<<Drop>>", app.handle_drop)
+        app.drop_title.drop_target_register(DND_FILES)
+        app.drop_title.dnd_bind("<<Drop>>", app.handle_drop)
+        app.drop_hint.drop_target_register(DND_FILES)
+        app.drop_hint.dnd_bind("<<Drop>>", app.handle_drop)
     root.mainloop()
